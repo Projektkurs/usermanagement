@@ -1,0 +1,16 @@
+[debug]
+port = 2005
+address = "192.168.0.199"
+[release]
+port = 2005
+address = "192.168.0.199"
+#secret_key = "vE/N4+NRLkqr1CW14YzibOp2BFXbSSYGtG4BeHsx/Ik="
+[default.databases.main_db]
+url = "mongodb://localhost:27017"
+
+min_connections = 64
+max_connections = 1024
+connect_timeout = 5
+idle_timeout = 120
+
+#databases = { main_db = { url = "mongodb://localhost:27017" } }  
