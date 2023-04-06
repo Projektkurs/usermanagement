@@ -26,8 +26,8 @@ async fn get(form: Form<user::UserData<'_>>, db: Connection<MainDatabase>) -> Op
         .ok()?;
     println!("user");
     let mut map = HashMap::new();
-    map.insert("neues Epaper", "1.2.3.4");
-    map.insert("altes Epaper", "2.3.4.5");
+    map.insert("neues Epaper", "http://192.168.43.36:8000");
+    map.insert("altes Epaper", "http://192.168.43.249:8000");
     println!("output");
     Some(rocket::serde::json::to_string(&map).ok()?)
 }

@@ -1,15 +1,12 @@
-use crate::{
-    database::{Connection, DatabaseUtils, MainDatabase},
-    room::Room,
-};
+use crate::database::{self, Connection, DatabaseConnection, DatabaseUtils, MainDatabase};
+use crate::room::Room;
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
 use bson::oid::ObjectId;
 use mongodb::bson::doc;
-use rocket::form::Form;
-use rocket::Route;
+use rocket::{form::Form, Route};
 use serde::*;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
@@ -22,7 +19,7 @@ pub struct User {
     is_active: bool,
     // Permissions
     is_admin: bool,
-    can_creat_users: bool,
+    can_create_users: bool,
     editable_rooms: Vec<bson::oid::ObjectId>, // saves name of the room
     // Personal information
     firstname: String,
@@ -30,9 +27,24 @@ pub struct User {
     email: Option<String>,
     phone_number: Option<String>, // String for setting prefix in brackets or +49
 }
+impl database::DatabaseConnection for User {
+    fn id(&self) -> ObjectId {
+        self.id
+    }
+    fn collection(db: &mongodb::Client) -> mongodb::Collection<Self> {
+        db.user_collection()
+    }
+    #[inline]
+    fn name(&self) -> &str {
+        &self.username
+    }
+    fn index_name() -> &'static str {
+        "username"
+    }
+}
 
 impl<'a> User {
-    // why does this function take so long to excecute? is it the SaltString?
+    // why does this function take so long to execute? is it the SaltString?
     pub fn new(firstname: String, surname: String, password: String) -> Result<Self, &'a str> {
         if password == " " {
             return Err("Password cannot be empty");
@@ -48,7 +60,7 @@ impl<'a> User {
             password_hash,
             is_active: true,
             is_admin: false,
-            can_creat_users: false,
+            can_create_users: false,
             editable_rooms: Vec::new(),
             firstname,
             surname,
@@ -58,39 +70,6 @@ impl<'a> User {
         user.validate_first_name().validate_surname()
     }
 
-    pub fn id(&self) -> ObjectId {
-        self.id
-    }
-
-    async fn insert(&self, db: &mongodb::Client) -> Option<()> {
-        if let Some(_) = User::getfromdb(&self.username, &db).await {
-            return None;
-        }
-        //todo
-        if let Ok(_user) = db.user_collection().insert_one(self, None).await {
-            Some(())
-        } else {
-            None
-        }
-    }
-    async fn update(&self, db: &mongodb::Client) -> Option<()> {
-        if db
-            .user_collection()
-            .replace_one(doc! {"_id":self.id}, self, None)
-            .await
-            .is_ok()
-        {
-            Some(())
-        } else {
-            None
-        }
-    }
-    async fn getfromdb(username: &str, db: &mongodb::Client) -> Option<Self> {
-        db.user_collection()
-            .find_one(doc! {"username": username}, None)
-            .await
-            .unwrap()
-    }
     // TODO: remove timing attack as the time if the user is right is significantly longer
     pub async fn login(
         username: &str,
@@ -111,7 +90,7 @@ impl<'a> User {
                 return Err("password wrong");
             }
         } else {
-            return Err("8ser not known");
+            return Err("user not known");
         }
     }
     pub fn can_edit_room(&self, room_id: &ObjectId) -> bool {
@@ -166,9 +145,11 @@ struct CreateUserForm<'r> {
     surname: &'r str,
     password: &'r str,
 }
-// todo: get access rights
-// add_room
-// todo: why does this function take so long to excecute?
+/// Creates a new User with given Credentials
+/// 
+/// The User that calls this method either needs to be admin
+/// or has the can_create_users field set
+/// 
 #[post("/create", data = "<form>")]
 async fn create(form: Form<CreateUserForm<'_>>, db: Connection<MainDatabase>) -> String {
     println!("{:?}", form);
@@ -180,7 +161,7 @@ async fn create(form: Form<CreateUserForm<'_>>, db: Connection<MainDatabase>) ->
     .await;
     if logged_in_user.is_ok() {
         let logged_in_user = logged_in_user.unwrap();
-        if !(logged_in_user.is_admin) && !(logged_in_user.can_creat_users) {
+        if !(logged_in_user.is_admin) && !(logged_in_user.can_create_users) {
             return String::from("you need to be admin or be able to create users");
         }
         let new_user = User::new(
@@ -189,7 +170,9 @@ async fn create(form: Form<CreateUserForm<'_>>, db: Connection<MainDatabase>) ->
             String::from(form.password),
         );
         if let Ok(new_user) = new_user {
-            new_user.insert(&*db).await;
+            if new_user.insert(&*db).await.is_err() {
+                return "user could not be inserted into DB".to_string();
+            }
             return rocket::serde::json::to_string(&new_user).unwrap();
         } else {
             return String::from(new_user.err().unwrap());
@@ -263,12 +246,11 @@ async fn change(form: Form<ChangeUserForm<'_>>, db: Connection<MainDatabase>) ->
     }
     user.email = form.email.clone();
     user.phone_number = form.phone_number.clone();
-    user.update(&db).await?;
+    user.update(&db).await.ok()?;
     Some(())
 }
 #[post("/get_rooms", data = "<form>")]
 async fn get_rooms(form: Form<UserData<'_>>, db: Connection<MainDatabase>) -> Option<String> {
-    //rocket::serde::json::to_string(
     let user = User::login(form.username, String::from(form.password), &*db)
         .await
         .ok()?;
@@ -277,13 +259,13 @@ async fn get_rooms(form: Form<UserData<'_>>, db: Connection<MainDatabase>) -> Op
         let mut rooms = Room::get_all_from_db(&db).await?;
         while rooms.advance().await.ok()? {
             let room = rooms.deserialize_current().ok()?;
-            ret.push_str(room.get_name());
+            ret.push_str(room.name());
             ret.push_str("\n");
         }
     } else {
         for room_id in user.editable_rooms {
-            let room = Room::getfromdb_id(&room_id, &db).await?;
-            ret.push_str(room.get_name());
+            let room = Room::getfromdb_id(&room_id, &db).await.ok()?;
+            ret.push_str(room.name());
             ret.push_str("\n");
         }
     }
@@ -317,7 +299,7 @@ async fn update_password(
         .unwrap()
         .to_string();
     user.password_hash = password_hash;
-    user.update(&*db).await?;
+    user.update(&*db).await.ok()?;
     Some(())
 }
 
@@ -334,6 +316,8 @@ pub fn routes() -> Vec<Route> {
 }
 #[cfg(test)]
 mod tests {
+    use crate::database::Error;
+
     use super::*;
     use mongodb::Client;
     use tokio::time;
@@ -347,87 +331,29 @@ mod tests {
             .unwrap();
         let users = &mut Vec::new();
         let start_time = time::Instant::now();
-
+        #[macro_export]
+    macro_rules! add_user {
+    ($firstname:expr,$surname:expr,$password:expr) => {
         users.push(
             User::new(
-                String::from("Max"),
-                String::from("Mustermann"),
-                String::from("1234"),
+                String::from($firstname),
+                String::from($surname),
+                String::from($password),
             )
             .unwrap(),
         );
-        users.push(
-            User::new(
-                String::from("Anna"),
-                String::from("Müller"),
-                String::from("5678"),
-            )
-            .unwrap(),
-        );
-        users.push(
-            User::new(
-                String::from("Hans"),
-                String::from("Schmidt"),
-                String::from("9012"),
-            )
-            .unwrap(),
-        );
-        users.push(
-            User::new(
-                String::from("Maria"),
-                String::from("Gonzalez"),
-                String::from("3456"),
-            )
-            .unwrap(),
-        );
-        users.push(
-            User::new(
-                String::from("Thomas"),
-                String::from("Lee"),
-                String::from("7890"),
-            )
-            .unwrap(),
-        );
-        users.push(
-            User::new(
-                String::from("Sarah"),
-                String::from("Kim"),
-                String::from("2345"),
-            )
-            .unwrap(),
-        );
-        users.push(
-            User::new(
-                String::from("David"),
-                String::from("Garcia"),
-                String::from("6789"),
-            )
-            .unwrap(),
-        );
-        users.push(
-            User::new(
-                String::from("Julia"),
-                String::from("Chen"),
-                String::from("0123"),
-            )
-            .unwrap(),
-        );
-        users.push(
-            User::new(
-                String::from("Peter"),
-                String::from("Jürgensen"),
-                String::from("4567"),
-            )
-            .unwrap(),
-        );
-        users.push(
-            User::new(
-                String::from("Lisa"),
-                String::from("Wong"),
-                String::from("8901"),
-            )
-            .unwrap(),
-        );
+    };
+}
+        add_user!("Max","Mustermann","1234");
+        add_user!("Anna","Müller","5678");
+        add_user!("Hans","Schmidt","9012");
+        add_user!("Maria","Gonzalez","3456");
+        add_user!("Thomas","Lee","7890");
+        add_user!("Sarah","Kim","2345");
+        add_user!("David","Gracia","6789");
+        add_user!("Julia","Chen","0123");
+        add_user!("Peter","Jürgensen","4567");
+        add_user!("Lisa","Wong","8901");
 
         let end_time = time::Instant::now();
         let response_time = end_time - start_time;
@@ -435,7 +361,7 @@ mod tests {
         let start_time = time::Instant::now();
 
         let insertfuture: &mut Vec<
-            std::pin::Pin<Box<dyn std::future::Future<Output = Option<()>>>>,
+            std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), Error>>>>,
         > = &mut Vec::new();
         for user in users {
             insertfuture.push(Box::pin(user.insert(&client)));
@@ -446,7 +372,7 @@ mod tests {
         for future in insertfuture {
             let start_time = time::Instant::now();
 
-            future.await;
+            let _ = future.await;
             let end_time = time::Instant::now();
             let response_time = end_time - start_time;
             response_times.push(response_time);

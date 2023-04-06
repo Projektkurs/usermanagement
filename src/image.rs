@@ -1,3 +1,4 @@
+use crate::debug_println;
 use crate::user;
 use crate::MainDatabase;
 use rocket::form::Form;
@@ -28,7 +29,6 @@ async fn upload(
             .size_limit(1024 * 200 * 1024)
             .content_type_by_string(Some(mime::IMAGE_STAR))
             .unwrap(),
-        //MultipartFormDataField::text("file_name"),
         MultipartFormDataField::text("username"),
         MultipartFormDataField::text("password"),
     ]);
@@ -40,7 +40,7 @@ async fn upload(
     let photo = multipart_form_data.files.get("image")?;
     let username = multipart_form_data.texts.remove("username")?.remove(0);
     let password = multipart_form_data.texts.remove("password")?.remove(0);
-    println!("login");
+    debug_println!("login");
     let _logged_in_user = user::User::login(&username.text, password.text, &*db)
         .await
         .ok()?;
@@ -51,22 +51,22 @@ async fn upload(
     let _file_name = file_field.file_name.clone()?;
     let _path = &file_field.path;
     {
-        println!("{}", _file_name);
-        println!("path:{}", _path.display());
+        debug_println!("{}", _file_name);
+        debug_println!("path:{}", _path.display());
         let mut src_file = File::open(_path).ok()?;
-        println!("opened src_file");
+        debug_println!("opened src_file");
         let mut dst_file = File::create(format!("./images/{}", _file_name)).ok()?;
-        println!("opened dst_file");
+        debug_println!("opened dst_file");
         std::io::copy(&mut src_file, &mut dst_file).ok()?;
     }
-    println!("create preview");
+    debug_println!("create preview");
     let img = image::open(format!("./images/{}", _file_name)).ok()?;
     //let img = image::open(_path).ok()?;
-    println!("opened preview");
+    debug_println!("opened preview");
     let preview_img = img.thumbnail(300, 300);
     let preview_path = format!("./previews/{}", _file_name);
     let mut preview_file = File::create(&preview_path).ok()?;
-    println!("createt preview file");
+    debug_println!("createt preview file");
     preview_img
         .write_to(&mut preview_file, image::ImageOutputFormat::Jpeg(40))
         .ok()?;
