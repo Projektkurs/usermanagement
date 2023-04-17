@@ -349,7 +349,7 @@ async fn get_event_range(
         println!("startdate:{:?}", start);
         let mut stop = start.clone().checked_add_days(chrono::Days::new(1))?;
         //todo: send bug report to chrono, as the +2 is a bug with crono. checked_add_days disregards the Local time zone, leading to a -2 hour gap.
-        stop = stop.with_hour(stop.hour() + 2)?;
+        //stop = stop.with_hour(stop.hour() + 2)?;
         println!("stoptdate:{:?}", stop);
         let events = room.get_event_range(start, stop).await;
         return rocket::serde::json::to_string(&events).ok();

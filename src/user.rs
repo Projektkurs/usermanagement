@@ -146,10 +146,10 @@ struct CreateUserForm<'r> {
     password: &'r str,
 }
 /// Creates a new User with given Credentials
-/// 
+///
 /// The User that calls this method either needs to be admin
 /// or has the can_create_users field set
-/// 
+///
 #[post("/create", data = "<form>")]
 async fn create(form: Form<CreateUserForm<'_>>, db: Connection<MainDatabase>) -> String {
     println!("{:?}", form);
@@ -332,28 +332,28 @@ mod tests {
         let users = &mut Vec::new();
         let start_time = time::Instant::now();
         #[macro_export]
-    macro_rules! add_user {
-    ($firstname:expr,$surname:expr,$password:expr) => {
-        users.push(
-            User::new(
-                String::from($firstname),
-                String::from($surname),
-                String::from($password),
-            )
-            .unwrap(),
-        );
-    };
-}
-        add_user!("Max","Mustermann","1234");
-        add_user!("Anna","Müller","5678");
-        add_user!("Hans","Schmidt","9012");
-        add_user!("Maria","Gonzalez","3456");
-        add_user!("Thomas","Lee","7890");
-        add_user!("Sarah","Kim","2345");
-        add_user!("David","Gracia","6789");
-        add_user!("Julia","Chen","0123");
-        add_user!("Peter","Jürgensen","4567");
-        add_user!("Lisa","Wong","8901");
+        macro_rules! add_user {
+            ($firstname:expr,$surname:expr,$password:expr) => {
+                users.push(
+                    User::new(
+                        String::from($firstname),
+                        String::from($surname),
+                        String::from($password),
+                    )
+                    .unwrap(),
+                );
+            };
+        }
+        add_user!("Max", "Mustermann", "1234");
+        add_user!("Anna", "Müller", "5678");
+        add_user!("Hans", "Schmidt", "9012");
+        add_user!("Maria", "Gonzalez", "3456");
+        add_user!("Thomas", "Lee", "7890");
+        add_user!("Sarah", "Kim", "2345");
+        add_user!("David", "Gracia", "6789");
+        add_user!("Julia", "Chen", "0123");
+        add_user!("Peter", "Jürgensen", "4567");
+        add_user!("Lisa", "Wong", "8901");
 
         let end_time = time::Instant::now();
         let response_time = end_time - start_time;

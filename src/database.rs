@@ -167,6 +167,8 @@ impl From<bson::ser::Error> for Error {
 #[macro_export]
 macro_rules! create_unique_index {
     ($collection:expr, $field:expr) => {
+        {
+        println!("creating index {}",$field);
         $collection
             .create_index(
                 IndexModel::builder()
@@ -176,10 +178,13 @@ macro_rules! create_unique_index {
                 None,
             )
             .await
+        }
     };
 }
 /// A fairing creates the indices that map the name field of every Struct in the database.
 pub async fn create_indices(rocket: Rocket<Build>) -> fairing::Result {
+    
+    
     debug_println!("building indices");
     if let Some(db) = MainDatabase::fetch(&rocket) {
         if create_unique_index!(db.0.user_collection(), "username").is_err()
@@ -187,6 +192,7 @@ pub async fn create_indices(rocket: Rocket<Build>) -> fairing::Result {
             || create_unique_index!(db.0.layout_collection(), "name").is_err()
             || create_unique_index!(db.0.epaper_collection(), "name").is_err()
         {
+            //return Ok(rocket);
             return Err(rocket);
         }
         return Ok(rocket);

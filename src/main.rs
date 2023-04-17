@@ -1,5 +1,5 @@
 //! main.rs - A Rocket backend for a Room Reservation
-//! 
+//!
 //! This backend is based on a REST API style whitch uses x-form
 //! to validate the identity of the request
 //!
@@ -18,10 +18,9 @@ mod image;
 mod room;
 mod user;
 
+use database::MainDatabase;
 use rocket::fairing::AdHoc;
 use rocket_db_pools::Database;
-use database::MainDatabase;
-
 
 #[launch]
 fn rocket() -> _ {
@@ -53,7 +52,6 @@ async fn status() -> Option<&'static str> {
 fn not_found() -> &'static str {
     ""
 }
-
 
 /// just a wrapper around println! which looks up, wether it is in DEBUG mode
 #[macro_export]

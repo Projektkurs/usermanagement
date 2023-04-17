@@ -153,8 +153,8 @@ mod tests {
         event.stop = event.stop.checked_add_days(Days::new(1)).unwrap();
         println!("first event:{:?}", event);
         room.add_event(event.clone()).unwrap();
-        //let event = Event::default();
         println!("second event:{:?}", event);
+        //this part should fail
         room.add_event(event).unwrap();
     }
     #[test]
